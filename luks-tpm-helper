@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+mapfile -t luksdisks < <(lsblk -p --json | jq -r 'path(.. | select(.=="crypt")) as $p | getpath($p[:-3]) | .name')
+
+ask() {
+  while :; do
+    prompt="  Automatically decrypt using the TPM? [Y/n]"
+    read -rp "${prompt}" choice
+    case "${choice}" in
+    y | Y | "") return 0 ;;
+    n | N) return 1 ;;
+    *) echo "  Invalid answer: ${choice}" ;;
+    esac
+  done
+}
+
+if command -v systemd-cryptenroll &>/dev/null; then
+  for disk in "${luksdisks[@]}"; do
+    echo "Found encrypted disk: ${disk}"
+    if ask; then
+      echo "  Running systemd-cryptenroll..."
+      sudo systemd-cryptenroll "${disk}" --tpm2-device=auto --wipe-slot=tpm2
+    fi
+  done
+else
+  # TODO: support clevis
+  echo "systemd-cryptenroll not found"
+fi
