@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+# Try to check if Secure Boot is enabled and warn in case it isn't
+if command -v mokutil &>/dev/null; then
+  if mokutil --sb-state | grep -q -v "SecureBoot enabled"; then
+    echo "Warning: Secure Boot is not enabled" >&2
+  fi
+else
+  echo "Warning: mokutil not found, could not check Secure Boot status" >&2
+fi
+
 mapfile -t luksdisks < <(lsblk -p --json | jq -r 'path(.. | select(.=="crypt")) as $p | getpath($p[:-3]) | .name')
 
 ask() {
