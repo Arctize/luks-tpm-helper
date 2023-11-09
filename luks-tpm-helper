@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+warn() { printf "Warning: %s\n" "$1" >&2; }
+err() { printf "Error: %s\n" "$1" >&2 && exit 1; }
+
 # Try to check if Secure Boot is enabled and warn in case it isn't
 if command -v mokutil &>/dev/null; then
   if mokutil --sb-state | grep -q -v "SecureBoot enabled"; then
-    echo "Warning: Secure Boot is not enabled" >&2
+    warn "Secure Boot is not enabled"
   fi
 else
-  echo "Warning: mokutil not found, could not check Secure Boot status" >&2
+  warn "mokutil not found, could not check Secure Boot status"
 fi
 
 mapfile -t luksdisks < <(lsblk -p --json | jq -r 'path(.. | select(.=="crypt")) as $p | getpath($p[:-3]) | .name')
@@ -38,8 +41,7 @@ elif command -v clevis &>/dev/null; then
   # Find out which PCR bank is used, clevis supports sha1 and sha256
   pcr_bank=$(sudo tpm2_pcrread | awk '$1=="0" {print substr(p, 1, length(p)-1); exit} {p=$1}')
   if [[ "${pcr_bank}" != @(sha1|sha256) ]]; then
-    echo "Error: No supported pcr_bank found" >&2
-    exit 1
+    err "No supported pcr_bank found"
   fi
   for disk in "${luksdisks[@]}"; do
     echo "Found encrypted disk: ${disk}"
@@ -49,6 +51,5 @@ elif command -v clevis &>/dev/null; then
     fi
   done
 else
-  echo "Found neither systemd-cryptenroll nor clevis" >&2
-  exit 1
+  err "Found neither systemd-cryptenroll nor clevis"
 fi
