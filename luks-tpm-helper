@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # Try to check if Secure Boot is enabled and warn in case it isn't
 if command -v mokutil &>/dev/null; then
@@ -23,6 +24,7 @@ ask() {
   done
 }
 
+# Use systemd-cryptenroll if available
 if command -v systemd-cryptenroll &>/dev/null; then
   for disk in "${luksdisks[@]}"; do
     echo "Found encrypted disk: ${disk}"
@@ -31,7 +33,22 @@ if command -v systemd-cryptenroll &>/dev/null; then
       sudo systemd-cryptenroll "${disk}" --tpm2-device=auto --wipe-slot=tpm2
     fi
   done
+# Alternatively use clevis
+elif command -v clevis &>/dev/null; then
+  # Find out which PCR bank is used, clevis supports sha1 and sha256
+  pcr_bank=$(sudo tpm2_pcrread | awk '$1=="0" {print substr(p, 1, length(p)-1); exit} {p=$1}')
+  if [[ "${pcr_bank}" != @(sha1|sha256) ]]; then
+    echo "Error: No supported pcr_bank found" >&2
+    exit 1
+  fi
+  for disk in "${luksdisks[@]}"; do
+    echo "Found encrypted disk: ${disk}"
+    if ask; then
+      echo "  Running clevis luks bind..."
+      sudo clevis luks bind -d "${disk}" tpm2 "{\"pcr_bank\":\"${pcr_bank}\",\"pcr_ids\":\"7\"}"
+    fi
+  done
 else
-  # TODO: support clevis
-  echo "systemd-cryptenroll not found"
+  echo "Found neither systemd-cryptenroll nor clevis" >&2
+  exit 1
 fi
