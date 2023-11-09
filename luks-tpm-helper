@@ -6,7 +6,7 @@ err() { printf "Error: %s\n" "$1" >&2 && exit 1; }
 
 # Try to check if Secure Boot is enabled and warn in case it isn't
 if command -v mokutil &>/dev/null; then
-  if mokutil --sb-state | grep -q -v "SecureBoot enabled"; then
+  if ! mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"; then
     warn "Secure Boot is not enabled"
   fi
 else
